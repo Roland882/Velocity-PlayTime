@@ -48,6 +48,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -111,22 +112,25 @@ public class Main {
     }
 
     public boolean loadDB() {
-        if(mySQLHandler.conn != null) //For reload
-            mySQLHandler.closeConnection();
-        else
-            new org.mariadb.jdbc.Driver(); //IF first time, init driver
-        logger.info("Connecting to the database...");
-        if(!mySQLHandler.openConnection())
+        try {
+            Class.forName("org.mariadb.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            logger.error("MariaDB JDBC Driver not found: {}", e.getMessage());
             return false;
-        try { //Verify conn if it didn't fail.
-            if(mySQLHandler.conn.isValid(2)) //Test conn, wait 2s
-                logger.info("Successfully connected to the database.");
-            else {
-                logger.error("Error while verifying the database connection.");
+        }
+        logger.info("Connecting to the database...");
+        if (!mySQLHandler.openConnection()) {
+            return false;
+        }
+        try (Connection conn = mySQLHandler.ds.getConnection()) {
+            if (conn.isValid(1)) {
+                logger.info("Successfully connected to the database");
+            } else {
+                logger.error("Failed to connect to the database");
                 return false;
             }
-        } catch (SQLException e) {
-            logger.error("Failed connecting to the database after initial connection succeeded: {}", e.getMessage());
+        } catch (SQLException sqe) {
+            logger.error("Failed to connect to the database", sqe);
             return false;
         }
         return true;

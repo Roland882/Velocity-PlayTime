@@ -96,6 +96,21 @@ public class ConfigHandler {//TODO REMOVE LOMBOK maybe
     private long start;
     private boolean OFFLINES_SHOULD_GET_REWARDS;
 
+    // HikariCP fields
+    private int maxPoolSize;
+    private int minIdle;
+    private long connectionTimeout;
+    private long idleTimeout;
+    private long maxLifetime;
+    private boolean cacheStmt;
+    private int prepStmtCacheSize;
+    private int prepStmtCacheSqlLimit;
+    private boolean useServerPrepStmts;
+    private boolean useLocalSessionState;
+    private boolean cacheServerConfiguration;
+    private boolean elideSetAutoCommit;
+    private boolean maintainTimeStats;
+
     private final TreeMap<Long, String> rewardsH = new TreeMap<>(); //TreeMap bc it needs to be ordered by the Long
     private String[] excludedSrvs = {};
 
@@ -166,6 +181,21 @@ public class ConfigHandler {//TODO REMOVE LOMBOK maybe
             USERNAME = config.getString("Data.DATABASE.USERNAME");
             final String cfg = config.getString("Data.DATABASE.PASSWORD");
             PASSWORD = cfg == null ? "" : cfg;
+            //HikariCP settings
+            maxPoolSize = config.getInt("Data.DATABASE.MAXIMUM_POOL_SIZE");
+            minIdle = config.getInt("Data.DATABASE.MINIMUM_IDLE");
+            connectionTimeout = config.getLong("Data.DATABASE.CONNECTION_TIMEOUT");
+            idleTimeout = config.getLong("Data.DATABASE.IDLE_TIMEOUT");
+            maxLifetime = config.getLong("Data.DATABASE.MAXIMUM_LIFETIME");
+            cacheStmt = config.getBoolean("Data.DATABASE.CACHE_PREP_STMTS");
+            prepStmtCacheSize = config.getInt("Data.DATABASE.PREP_STMT_CACHE_SIZE");
+            prepStmtCacheSqlLimit = config.getInt("Data.DATABASE.PREP_STMT_CACHE_SQL_LIMIT");
+            useServerPrepStmts = config.getBoolean("Data.DATABASE.USE_SERVER_PREP_STMTS");
+            useLocalSessionState = config.getBoolean("Data.DATABASE.USE_LOCAL_SESSION_STATE");
+            cacheServerConfiguration = config.getBoolean("Data.DATABASE.CACHE_SERVER_CONFIGURATION");
+            elideSetAutoCommit = config.getBoolean("Data.DATABASE.ELIDE_SET_AUTO_COMMITS");
+            maintainTimeStats = config.getBoolean("Data.DATABASE.MAINTAIN_TIME_STATS");
+
         }
 
         VIEW_OWN_TIME = config.getBoolean("Data.PERMISSIONS.VIEW_OWN_TIME");

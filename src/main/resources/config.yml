@@ -50,6 +50,19 @@ Data:
     DB_NAME: playtime
     USERNAME: root
     PASSWORD: null
+    MAXIMUM_POOL_SIZE: 5    # Maximum number of connections in the pool (5-10 for small servers, 10-20 for large)
+    MINIMUM_IDLE: 2         # Minimum number of idle connections (2-5 for efficiency)
+    CONNECTION_TIMEOUT: 10000  # Time to wait for a connection (ms, 10000 = 10 seconds)
+    IDLE_TIMEOUT: 600000      # Time a connection can remain idle (ms, 600000 = 10 minutes)
+    MAXIMUM_LIFETIME: 1800000 # Maximum lifetime of a connection (ms, 1800000 = 30 minutes)
+    CACHE_PREP_STMTS: true    # Enable caching of prepared statements for performance
+    PREP_STMT_CACHE_SIZE: 250 # Number of prepared statements to cache
+    PREP_STMT_CACHE_SQL_LIMIT: 2048  # Maximum SQL length for cached statements
+    USE_SERVER_PREP_STMTS: true  # Use server-side prepared statements for better performance
+    USE_LOCAL_SESSION_STATE: true  # Optimize session state handling
+    CACHE_SERVER_CONFIGURATION: true  # Cache server configuration to reduce queries
+    ELIDE_SET_AUTO_COMMITS: true  # Skip redundant auto-commit calls
+    MAINTAIN_TIME_STATS: false  # Disable connection timing stats to reduce overhead
   CHECK_FOR_UPDATES: true
   CACHING: #Should improve performance when turned on. If there are issues with the plugin, try turning it off. The 2nd option is about how often unneeded entries are cleared from the cache, in ms.
     USE_CACHE: true

@@ -17,8 +17,13 @@
 package _1ms.playtime.Handlers;
 
 import _1ms.playtime.Main;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -27,104 +32,100 @@ public class MySQLHandler {
 
     private final ConfigHandler configHandler;
     private final Main main;
+    public HikariDataSource ds;
     public MySQLHandler(ConfigHandler configHandler, Main main) {
         this.configHandler = configHandler;
         this.main = main;
     }
 
-    public Connection conn;
     public boolean openConnection() {
-        final String url = "jdbc:mariadb://" + configHandler.getADDRESS() +":" + configHandler.getPORT() + "/" + configHandler.getDB_NAME() + "?user=" + configHandler.getUSERNAME() + "&password=" + configHandler.getPASSWORD() + "&driver=org.mariadb.jdbc.Driver";
         try {
-            conn = DriverManager.getConnection(url);
-            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS playtimes (name VARCHAR(20) PRIMARY KEY, time BIGINT NOT NULL)");
-        } catch (SQLException e) {
-            main.getLogger().error("Error while connecting to the database: {}", e.getMessage());
+            HikariConfig config = new HikariConfig();
+            config.setJdbcUrl("jdbc:mariadb://" + configHandler.getADDRESS() + ":" +  configHandler.getPORT() + "/" + configHandler.getDB_NAME());
+            config.setUsername(configHandler.getUSERNAME());
+            config.setPassword(configHandler.getPASSWORD());
+            config.setDriverClassName("org.mariadb.jdbc.Driver");
+            config.setMaximumPoolSize(configHandler.getMaxPoolSize());
+            config.setMinimumIdle(configHandler.getMinIdle());
+            config.setConnectionTimeout(configHandler.getConnectionTimeout());
+            config.setIdleTimeout(configHandler.getIdleTimeout());
+            config.setMaxLifetime(configHandler.getMaxLifetime());
+            config.setConnectionTestQuery("SELECT 1");
+            config.addDataSourceProperty("cachePrepStmts", String.valueOf(configHandler.isCacheStmt()));
+            config.addDataSourceProperty("prepStmtCacheSize", String.valueOf(configHandler.getPrepStmtCacheSize()));
+            config.addDataSourceProperty("prepStmtCacheSqlLimit", String.valueOf(configHandler.getPrepStmtCacheSqlLimit()));
+            config.addDataSourceProperty("useServerPrepStmts", String.valueOf(configHandler.isUseServerPrepStmts()));
+            config.addDataSourceProperty("useLocalSessionState", String.valueOf(configHandler.isUseLocalSessionState()));
+            config.addDataSourceProperty("cacheServerConfiguration", String.valueOf(configHandler.isCacheServerConfiguration()));
+            config.addDataSourceProperty("elideSetAutoCommits", String.valueOf(configHandler.isElideSetAutoCommit()));
+            config.addDataSourceProperty("maintainTimeStats", String.valueOf(configHandler.isMaintainTimeStats()));
+            ds = new HikariDataSource(config);
+
+            // Create table if it doesn't exist
+            try (Connection conn = ds.getConnection();
+                 PreparedStatement st = conn.prepareStatement("CREATE TABLE IF NOT EXISTS playtimes (name VARCHAR(20) PRIMARY KEY, time BIGINT NOT NULL)")) {
+                st.executeUpdate();
+            }
+            return true;
+        } catch (SQLException sqe) {
+            main.getLogger().error("Error while connecting to the database: {}", sqe.getMessage());
             return false;
         }
-        return true;
     }
 
     public void saveData(final String name, final long time) {
-        for(int i = 0; i < 2; i++) {
-            try(PreparedStatement pstmt = conn.prepareStatement("INSERT INTO playtimes (name, time) VALUES (?, ?) ON DUPLICATE KEY UPDATE time = ?")) {
-                pstmt.setString(1, name);
-                pstmt.setLong(2, time);
-                pstmt.setLong(3, time);
-                pstmt.executeUpdate();
-                break;
-            } catch (SQLException e) {
-                if(e instanceof SQLNonTransientConnectionException) { //If the conn was dropped, try to reopen it once.
-                    openConnection();
-                    continue;
-                }
-                throw new RuntimeException("Error while saving data into the database", e);
-            }
+        try (Connection conn = ds.getConnection();
+             PreparedStatement st = conn.prepareStatement("INSERT INTO playtimes (name, time) VALUES (?, ?) ON DUPLICATE KEY UPDATE time = ?")) {
+            st.setString(1, name);
+            st.setLong(2, time);
+            st.setLong(3, time);
+            st.executeUpdate();
+        } catch (SQLException sqe) {
+            throw new RuntimeException("Error while saving data into the database", sqe);
         }
     }
 
     public long readData(final String name) {
-        for(int i = 0; i < 2; i++) {
-            try(PreparedStatement pstmt = conn.prepareStatement("SELECT time FROM playtimes WHERE name = ?")) {
-                pstmt.setString(1, name);
-                try(ResultSet rs = pstmt.executeQuery()) {
-                    if(rs.next())
-                        return rs.getLong("time");
+        try (Connection conn = ds.getConnection();
+             PreparedStatement st = conn.prepareStatement("SELECT TIME FROM playtimes WHERE name = ?")) {
+            st.setString(1, name);
+            try (ResultSet rs = st.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getLong("time");
                 }
                 return -1;
-            } catch (SQLException e) {
-                if(e instanceof SQLNonTransientConnectionException) {
-                    openConnection();
-                    continue;
-                }
-                throw new RuntimeException("Error while reading data from the database", e);
             }
+        } catch (SQLException sqe) {
+            throw new RuntimeException("Error while reading data from the database", sqe);
         }
-        main.getLogger().error("DB read error - Invalid state.");
-        return -999;
     }
 
     public Iterator<String> getIterator() {
         final Set<String> playtimes = new HashSet<>();
-        for (int i = 0; i < 2; i++) {
-            try(ResultSet rs = conn.prepareStatement("SELECT name FROM playtimes").executeQuery()) {
-                while (rs.next())
-                    playtimes.add(rs.getString("name"));
-                return playtimes.iterator(); //Fill up and then  ret
-            } catch (SQLException e) {
-                if(e instanceof SQLNonTransientConnectionException) {
-                    openConnection();
-                    playtimes.clear(); //CLear leftovers.
-                    continue;
-                }
-                throw new RuntimeException("Error while reading data from the database", e);
+        try (Connection conn = ds.getConnection();
+             PreparedStatement st = conn.prepareStatement("SELECT name FROM playtimes");
+             ResultSet rs = st.executeQuery()) {
+            while (rs.next()) {
+                playtimes.add(rs.getString("name"));
             }
+            return playtimes.iterator();
+        } catch (SQLException sqe) {
+            throw new RuntimeException("Error while reading data from the database", sqe);
         }
-        main.getLogger().error("DB IT error - Invalid state."); //Should never reach here?
-        return null;
     }
 
     public void deleteAll() {
-        for(int i = 0; i < 2; i++) {
-            try(PreparedStatement pstmt = conn.prepareStatement("DELETE FROM playtimes")) {
-                pstmt.executeUpdate();
-                break;
-            } catch (SQLException e) {
-                if(e instanceof SQLNonTransientConnectionException) {
-                    openConnection();
-                    continue;
-                }
-                throw new RuntimeException("Error while saving data into the database",e);
-            }
+        try (Connection conn = ds.getConnection();
+             PreparedStatement st = conn.prepareStatement("DELETE FROM playtimes")) {
+            st.executeUpdate();
+        } catch (SQLException sqe) {
+            throw new RuntimeException("Error while deleting data from the database", sqe);
         }
     }
 
     public void closeConnection() {
-        try {
-            if (conn != null && !conn.isClosed())
-                conn.close();
-        } catch (SQLException e) {
-            throw new RuntimeException("Error while closing connection with the database", e);
+        if (ds != null && !ds.isClosed()) {
+            ds.close();
         }
     }
 }
